@@ -1,13 +1,17 @@
-import { useClerk, useAuth, useSignUp, useUser, useSession } from "@clerk/clerk-react"
+import { useClerk, useAuth, useSignUp,useSignIn, useUser, useSession } from "@clerk/clerk-react"
 import { useState, useEffect } from "react"
 import axios from "axios"
 import { useNavigate } from "react-router-dom"
+import { useCallback } from "react"
+import { FcGoogle } from "react-icons/fc";
+import {FaSpinner} from "react-icons/fa";
 
 const SignUpPage = () => {
   const { signUp, isLoaded } = useSignUp()
   const { signOut, setActive } = useClerk()
   const { session } = useSession()
   const { isSignedIn, getToken, userId } = useAuth()
+  const {signIn} = useSignIn()
   const { user } = useUser()
   const [username, setUsername] = useState("")
   const [emailAddress, setEmail] = useState("")
@@ -16,8 +20,8 @@ const SignUpPage = () => {
   const [showVerification, setShowVerification] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isVerifying, setIsVerifying] = useState(false)
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [debugInfo, setDebugInfo] = useState({})
-
   const navigate_to = useNavigate()
 
   useEffect(() => {
@@ -31,7 +35,51 @@ const SignUpPage = () => {
     setDebugInfo(authState)
   }, [isSignedIn, userId, user, session])
 
-  localStorage.clear()
+  useEffect(() => {
+    if (isLoaded && isSignedIn) {
+      const handleAutoSignOut = async () => {
+        try {
+          await signOut();
+          console.log("Auto-signed out on sign-up page.");
+        } catch (err) {
+          console.error("Auto sign-out error:", err);
+        }
+      };
+      handleAutoSignOut();
+    }
+  }, [isLoaded, isSignedIn, signOut]);
+
+
+const handleGoogleSignUp = useCallback(async () => {
+    if (!isLoaded) return;
+
+    setIsGoogleLoading(true);
+    try {
+      // Sign out first as fallback
+      await signOut();
+
+      // Reset Turnstile
+      if (window.turnstile) {
+        window.turnstile.reset();
+      }
+
+      await signUp.authenticateWithRedirect({
+        strategy: "oauth_google",
+        redirectUrl: "/sso", // Your callback URL
+        redirectUrlComplete: "/home", // Where to go after success
+      });
+    } catch (error) {
+      console.error("Google SignUp Error:", error);
+      if (error.message?.includes("already signed in")) {
+        alert("You were already signed in. Signed out—please try again.");
+      } else {
+        alert("Google sign-up failed. Please try again.");
+      }
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  }, [isLoaded, signOut, signUp]);
+
 
   const validateForm = () => {
     if (!username.trim()) {
@@ -233,7 +281,36 @@ return (
           </>
         )}
       </form>
+      
+     <div className="flex flex-col items-center gap-4 w-full">
+          {/* Divider with "or" */}
+          <div className="flex items-center w-full mt-3">
+            <div className="flex-grow border-t border-gray-300"></div>
+            <span className="px-3 text-gray-500 text-sm">or</span>
+            <div className="flex-grow border-t border-gray-300"></div>
+          </div>
 
+                {/* Google Button */}
+            <button
+              onClick={handleGoogleSignUp}
+              disabled={isGoogleLoading}
+              className={`flex items-center justify-center gap-3 w-full max-w-sm rounded-xl border border-gray-300 px-4 py-2 font-medium shadow-sm transition 
+                ${isGoogleLoading ? "bg-gray-100 text-gray-400 cursor-not-allowed" : "bg-white text-gray-700 hover:bg-gray-100"}`}
+            >
+              {isGoogleLoading ? (
+                <>
+                  <FaSpinner className="h-5 w-5 animate-spin" />
+                  Almost there…
+                </>
+              ) : (
+                <>
+                  <FcGoogle size={22} />
+                  Continue with Google
+                </>
+              )}
+            </button>      
+       </div>
+      
       <div className="mt-6 text-center text-sm text-gray-600">
         Already have an account?{" "}
         <button
